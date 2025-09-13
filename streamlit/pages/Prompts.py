@@ -8,7 +8,7 @@ st.set_page_config(page_title="Flow Builder", layout="wide")
 load_env()
 
 st.title("Flow Builder")
-st.caption("Manage multiple flows. Edit steps with per-step model settings. Run the flow from the sidebar.")
+st.caption("Manage multiple flows. Edit steps with per-step settings. Connect steps to form a graph.")
 
 if "flows_state" not in st.session_state:
     st.session_state["flows_state"] = load_flows()
@@ -61,9 +61,12 @@ with col_top[4]:
         save_flows(data)
         st.rerun()
 
-# Current editable flow
-current = next((f for f in flows if f.get("name") == sel), flows[0] if flows else {"name": "Blog", "steps": []})
+_current = next((f for f in flows if f.get("name") == sel), flows[0] if flows else {"name": "Blog", "steps": []})
+current = _current
 steps = current.setdefault("steps", [])
+graph = current.setdefault("graph", {})
+nodes = graph.setdefault("nodes", [])
+edges = graph.setdefault("edges", [])
 
 st.markdown("Variables: `{idea}`, `{notes}`, plus outputs of prior steps by their output key (e.g., `{outline}`).")
 
@@ -86,6 +89,24 @@ def add_item() -> None:
         "max_tokens": 1200,
         "top_p": 1.0,
     })
+
+existing_keys = [s.get("output_key", f"step{idx+1}") for idx, s in enumerate(steps)]
+
+def downstream_defaults(i: int) -> list[str]:
+    # Build default downstream connections from edges if present
+    key = steps[i].get("output_key", f"step{i+1}")
+    # Map node ids by key if nodes cohort exists
+    key_to_id = {n.get("output_key", existing_keys[idx]): int(n.get("id", idx+1)) for idx, n in enumerate(nodes)}
+    id_to_key = {v: k for k, v in key_to_id.items()}
+    sid = key_to_id.get(key)
+    outs: list[str] = []
+    if sid is not None:
+        for e in edges:
+            if int(e.get("source", -1)) == sid:
+                k = id_to_key.get(int(e.get("target", -1)))
+                if k:
+                    outs.append(k)
+    return outs
 
 for i, step in enumerate(steps):
     with st.container(border=True):
@@ -124,6 +145,16 @@ for i, step in enumerate(steps):
         with pcols[4]:
             step["max_tokens"] = int(st.number_input("MaxTok", min_value=1, max_value=4000, value=int(step.get("max_tokens", 1200)), step=50, key=f"maxtok_{i}"))
 
+        # Graph connections (fallback until drag & drop is added)
+        step.setdefault("connect_to", downstream_defaults(i))
+        step["connect_to"] = st.multiselect(
+            "Connect to (downstream)",
+            options=[k for k in existing_keys if k != step.get("output_key", f"step{i+1}")],
+            default=step.get("connect_to", []),
+            key=f"connect_{i}",
+            help="Choose which steps depend on this step's output.",
+        )
+
 st.divider()
 cols = st.columns([1, 1, 2])
 with cols[0]:
@@ -133,6 +164,30 @@ with cols[0]:
         st.rerun()
 with cols[1]:
     if st.button("Save Flow", type="primary"):
+        # Materialize a graph from connect_to fields
+        # Node ids are positional for now
+        nodes = []
+        for idx, s in enumerate(steps):
+            nd = {
+                "id": idx + 1,
+                "label": s.get("label", f"Step {idx+1}"),
+                "output_key": s.get("output_key", f"step{idx+1}"),
+                "template": s.get("template", ""),
+                "provider": s.get("provider", "Groq"),
+                "model": s.get("model", get_default_model(s.get("provider", "Groq"))),
+                "temperature": float(s.get("temperature", 0.7)),
+                "max_tokens": int(s.get("max_tokens", 1200)),
+                "top_p": float(s.get("top_p", 1.0)),
+            }
+            nodes.append(nd)
+        key_to_id = {n["output_key"]: n["id"] for n in nodes}
+        edges = []
+        for idx, s in enumerate(steps):
+            src_id = idx + 1
+            for tgt_key in s.get("connect_to", []) or []:
+                if tgt_key in key_to_id:
+                    edges.append({"source": src_id, "target": key_to_id[tgt_key]})
+        current["graph"] = {"nodes": nodes, "edges": edges}
         save_flows(data)
         st.success("Flow saved.")
 

@@ -369,3 +369,69 @@ def save_flow(flow: List[Dict[str, Any]]) -> None:
             f["steps"] = [_normalize_step(s, i) for i, s in enumerate(flow)]
             break
     save_flows(data)
+
+
+# Graph helpers
+def get_flow_graph(flow: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    # Prefer explicit nodes/edges if present
+    nodes = flow.get("nodes")
+    edges = flow.get("edges")
+    if isinstance(nodes, list) and isinstance(edges, list):
+        return nodes, edges
+    # Fallback: derive from steps (linear chain)
+    steps = flow.get("steps", [])
+    nodes = []
+    for i, s in enumerate(steps):
+        nd = dict(_normalize_step(s, i))
+        nd["id"] = i + 1
+        nodes.append(nd)
+    # If steps contain connect_to, build edges from that; else linear
+    has_conn = any(isinstance(s, dict) and s.get("connect_to") for s in steps)
+    if has_conn:
+        key_to_id = {nd.get("output_key", f"step{idx+1}"): nd["id"] for idx, nd in enumerate(nodes)}
+        e: List[Dict[str, Any]] = []
+        for idx, s in enumerate(steps):
+            outs = s.get("connect_to", []) if isinstance(s, dict) else []
+            for k in outs:
+                if k in key_to_id:
+                    e.append({"source": nodes[idx]["id"], "target": key_to_id[k]})
+        edges = e
+    else:
+        edges = [{"source": i, "target": i + 1} for i in range(1, len(nodes))]
+    return nodes, edges
+
+
+def topological_order(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> List[int]:
+    # Kahn's algorithm
+    ids = [int(n.get("id")) for n in nodes if "id" in n]
+    indeg = {i: 0 for i in ids}
+    adj: Dict[int, List[int]] = {i: [] for i in ids}
+    for e in edges:
+        try:
+            u = int(e.get("source"))
+            v = int(e.get("target"))
+        except Exception:
+            continue
+        if u in adj and v in indeg:
+            adj[u].append(v)
+            indeg[v] += 1
+    q = [i for i in ids if indeg[i] == 0]
+    order: List[int] = []
+    while q:
+        u = q.pop(0)
+        order.append(u)
+        for v in adj.get(u, []):
+            indeg[v] -= 1
+            if indeg[v] == 0:
+                q.append(v)
+    if len(order) != len(ids):
+        # Cycle or disconnected parts; fallback to ID order
+        return ids
+    return order
+
+
+def get_execution_sequence(flow: Dict[str, Any]) -> List[Dict[str, Any]]:
+    nodes, edges = get_flow_graph(flow)
+    order = topological_order(nodes, edges)
+    by_id = {int(n.get("id", i + 1)): n for i, n in enumerate(nodes)}
+    return [by_id[i] for i in order if i in by_id]

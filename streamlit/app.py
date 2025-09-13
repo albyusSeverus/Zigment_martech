@@ -2,11 +2,12 @@ import streamlit as st
 
 from utils import (
     load_env,
-    get_default_model,
     generate,
     set_last_output,
     format_prompt,
-    load_flow,
+    load_flows,
+    get_active_flow,
+    get_execution_sequence,
 )
 
 
@@ -19,33 +20,28 @@ st.title("Content Generator")
 st.caption("Customize the flow in Prompts → Flow Builder. Then run steps here.")
 
 with st.sidebar:
-    st.header("Model & Params")
-    provider = st.radio("Provider", ["Groq", "Gemini"], index=0, horizontal=True)
-    model = st.text_input("Model", value=get_default_model(provider))
-    temperature = st.slider("Temperature", 0.0, 2.0, 0.7, 0.1)
-    max_tokens = st.number_input("Max tokens", 1, 4000, 1200, 50)
-    top_p = st.slider("Top P", 0.0, 1.0, 1.0, 0.05)
+    st.header("Run")
+    st.caption("Uses per-step settings from the active flow.")
+    run_all = st.button("Generate All", type="primary")
+    _, active_flow = get_active_flow()
+    seq = get_execution_sequence(active_flow)
+    step_opts = [f"{i+1}. {s.get('label','Step')}" for i, s in enumerate(seq)]
+    sel = st.selectbox("Run single step", step_opts)
+    run_one = st.button("Run Selected")
 
-# Inputs
+# Inputs (shared variables for prompts)
 idea = st.text_input("Idea / Topic", value="Agentic AI for growth teams")
 notes = st.text_area("Notes (optional)", height=100)
 
-flow = load_flow()
-
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    run_all = st.button("Generate All", type="primary")
-with col2:
-    step_to_run = st.selectbox("Run single step", [f"{i+1}. {s['label']}" for i, s in enumerate(flow)])
-    run_one = st.button("Run Selected")
+_, flow = get_active_flow()
+seq = get_execution_sequence(flow)
 
 # Store step outputs
 if "flow_outputs" not in st.session_state:
     st.session_state["flow_outputs"] = {}
 
 def run_step(idx: int) -> None:
-    step = flow[idx]
+    step = seq[idx]
     tmpl = step.get("template", "")
     out_key = step.get("output_key", f"step{idx+1}")
     variables = {"idea": idea, "notes": notes}
@@ -69,11 +65,11 @@ def run_step(idx: int) -> None:
         st.error(str(e))
 
 if run_all:
-    for i in range(len(flow)):
+    for i in range(len(seq)):
         run_step(i)
 
 if run_one:
-    idx = int(step_to_run.split(".")[0]) - 1
+    idx = int(sel.split(".")[0]) - 1
     run_step(idx)
 
 st.subheader("Flow Outputs")
@@ -81,7 +77,7 @@ outs = st.session_state.get("flow_outputs", {})
 if not outs:
     st.info("No outputs yet. Generate steps to see results.")
 else:
-    for i, step in enumerate(flow):
+    for i, step in enumerate(seq):
         key = step.get("output_key", f"step{i+1}")
         lbl = step.get("label", f"Step {i+1}")
         st.markdown(f"### {i+1}. {lbl} ({key})")

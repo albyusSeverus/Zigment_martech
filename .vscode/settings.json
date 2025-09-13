@@ -1,0 +1,5 @@
+{
+  "python.defaultInterpreterPath": "streamlit/.venv/Scripts/python.exe",
+  "python.terminal.activateEnvironment": true
+}
+

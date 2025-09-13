@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Start UI (Streamlit)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "${workspaceFolder}/Start-Streamlit.cmd",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Start UI (Streamlit, parent workspace)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "${workspaceFolder}/content-engine/Start-Streamlit.cmd",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Debug UI (Streamlit)",
+      "type": "python",
+      "request": "launch",
+      "module": "streamlit",
+      "args": ["run", "streamlit/app.py"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

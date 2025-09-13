@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Streamlit (cmd)",
+      "type": "shell",
+      "command": "${workspaceFolder}/Start-Streamlit.cmd",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Run Streamlit (cmd, parent workspace)",
+      "type": "shell",
+      "command": "${workspaceFolder}/content-engine/Start-Streamlit.cmd",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Run Streamlit (venv)",
+      "type": "shell",
+      "command": "${workspaceFolder}/streamlit/.venv/Scripts/python.exe",
+      "args": ["-m", "streamlit", "run", "streamlit/app.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Run Streamlit (venv, parent workspace)",
+      "type": "shell",
+      "command": "${workspaceFolder}/content-engine/streamlit/.venv/Scripts/python.exe",
+      "args": ["-m", "streamlit", "run", "content-engine/streamlit/app.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    }
+  ]
+}

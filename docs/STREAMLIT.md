@@ -1,9 +1,9 @@
 # Streamlit UI
 
-Two simple pages:
+Two pages:
 
-- `streamlit/app.py` – Content Generator (choose model, idea → Generate Outline → Generate Blog).
-- `streamlit/pages/Prompts.py` – Prompt Manager to edit base templates for Outline and Blog.
+- `streamlit/app.py` – Content Generator (runs your configured flow: choose model, idea → Generate steps).
+- `streamlit/pages/Prompts.py` – Flow Builder to design/edit the ordered steps and their prompt templates.
 
 ## Setup
 
@@ -43,9 +43,9 @@ streamlit run streamlit/app.py
 
 ## Usage
 
-- Open `Prompts` to configure templates. Variables:
-  - Outline: `{idea}`, `{notes}`
-  - Blog: `{idea}`, `{notes}`, `{outline}`
-- In `Content Generator`, pick provider/model, enter an idea + optional notes, click `Generate Outline`.
-- If satisfied, click `Generate Blog`.
-
+- Open `Prompts` to configure the flow. For each step, set:
+  - Label: display name.
+  - Output key: how later steps reference this step’s output (e.g., `outline`).
+  - Template: the prompt text (variables available: `{idea}`, `{notes}`, plus prior step outputs by their output key, e.g. `{outline}`).
+- In `Content Generator`, pick provider/model and enter Idea + Notes.
+- Click `Generate All` or run a specific step from the dropdown.

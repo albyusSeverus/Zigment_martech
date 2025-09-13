@@ -21,6 +21,7 @@ except Exception:  # pragma: no cover
 # Repo root (two levels up from this file)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROMPTS_FILE = REPO_ROOT / "streamlit" / ".streamlit" / "prompts.json"
+FLOW_FILE = REPO_ROOT / "streamlit" / ".streamlit" / "flow.json"
 
 
 def load_env() -> None:
@@ -208,3 +209,56 @@ def format_prompt(template: str, variables: Dict[str, Any]) -> str:
             return ""
 
     return str(template).format_map(SafeDict(variables))
+
+
+# Flow management
+DEFAULT_FLOW = [
+    {
+        "label": "Outline",
+        "output_key": "outline",
+        "template": DEFAULT_PROMPTS["outline"],
+    },
+    {
+        "label": "Blog",
+        "output_key": "blog",
+        "template": DEFAULT_PROMPTS["blog"],
+    },
+]
+
+
+def _ensure_flow_file() -> None:
+    FLOW_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not FLOW_FILE.exists():
+        FLOW_FILE.write_text(json.dumps(DEFAULT_FLOW, indent=2), encoding="utf-8")
+
+
+def load_flow() -> List[Dict[str, Any]]:
+    _ensure_flow_file()
+    try:
+        data = json.loads(FLOW_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            # Basic shape validation
+            out: List[Dict[str, Any]] = []
+            for step in data:
+                if not isinstance(step, dict):
+                    continue
+                label = str(step.get("label", "Step"))
+                key = str(step.get("output_key", "step"))
+                template = str(step.get("template", ""))
+                out.append({"label": label, "output_key": key, "template": template})
+            return out or list(DEFAULT_FLOW)
+    except Exception:
+        pass
+    return list(DEFAULT_FLOW)
+
+
+def save_flow(flow: List[Dict[str, Any]]) -> None:
+    # Normalize
+    norm: List[Dict[str, Any]] = []
+    for s in flow:
+        norm.append({
+            "label": str(s.get("label", "Step")),
+            "output_key": str(s.get("output_key", "step")),
+            "template": str(s.get("template", "")),
+        })
+    FLOW_FILE.write_text(json.dumps(norm, indent=2), encoding="utf-8")

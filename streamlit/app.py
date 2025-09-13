@@ -5,8 +5,8 @@ from utils import (
     get_default_model,
     generate,
     set_last_output,
-    load_prompts,
     format_prompt,
+    load_flow,
 )
 
 
@@ -16,7 +16,7 @@ st.set_page_config(page_title="Content Generator", layout="wide")
 load_env()
 
 st.title("Content Generator")
-st.caption("Enter an idea, generate an outline, then generate the blog.")
+st.caption("Customize the flow in Prompts → Flow Builder. Then run steps here.")
 
 with st.sidebar:
     st.header("Model & Params")
@@ -30,36 +30,53 @@ with st.sidebar:
 idea = st.text_input("Idea / Topic", value="Agentic AI for growth teams")
 notes = st.text_area("Notes (optional)", height=100)
 
-prompts = load_prompts()
+flow = load_flow()
 
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    run_outline = st.button("Generate Outline", type="primary")
+    run_all = st.button("Generate All", type="primary")
 with col2:
-    run_blog = st.button("Generate Blog", disabled=not bool(st.session_state.get("last_outline")))
+    step_to_run = st.selectbox("Run single step", [f"{i+1}. {s['label']}" for i, s in enumerate(flow)])
+    run_one = st.button("Run Selected")
 
-if run_outline:
-    outline_prompt = format_prompt(prompts.get("outline", ""), {"idea": idea, "notes": notes})
+# Store step outputs
+if "flow_outputs" not in st.session_state:
+    st.session_state["flow_outputs"] = {}
+
+def run_step(idx: int) -> None:
+    step = flow[idx]
+    tmpl = step.get("template", "")
+    out_key = step.get("output_key", f"step{idx+1}")
+    variables = {"idea": idea, "notes": notes}
+    variables.update(st.session_state.get("flow_outputs", {}))
+    prompt_text = format_prompt(tmpl, variables)
     try:
-        outline_text = generate(provider, outline_prompt, None, model, float(temperature), int(max_tokens), float(top_p))
-        set_last_output("outline", outline_text)
+        text = generate(provider, prompt_text, None, model, float(temperature), int(max_tokens), float(top_p))
+        st.session_state["flow_outputs"][out_key] = text
+        # Maintain legacy convenience keys for two-step flows
+        if out_key.lower() == "outline":
+            set_last_output("outline", text)
+        if out_key.lower() in ("blog", "content"):
+            set_last_output("content", text)
     except Exception as e:  # noqa: BLE001
         st.error(str(e))
 
-if run_blog and st.session_state.get("last_outline"):
-    blog_prompt = format_prompt(
-        prompts.get("blog", ""),
-        {"idea": idea, "notes": notes, "outline": st.session_state.get("last_outline", "")},
-    )
-    try:
-        blog_text = generate(provider, blog_prompt, None, model, float(temperature), int(max_tokens), float(top_p))
-        set_last_output("content", blog_text)
-    except Exception as e:  # noqa: BLE001
-        st.error(str(e))
+if run_all:
+    for i in range(len(flow)):
+        run_step(i)
 
-st.subheader("Outline (latest)")
-st.code(st.session_state.get("last_outline", "No outline yet."), language="markdown")
+if run_one:
+    idx = int(step_to_run.split(".")[0]) - 1
+    run_step(idx)
 
-st.subheader("Blog (latest)")
-st.code(st.session_state.get("last_content", "No blog generated yet."), language="markdown")
+st.subheader("Flow Outputs")
+outs = st.session_state.get("flow_outputs", {})
+if not outs:
+    st.info("No outputs yet. Generate steps to see results.")
+else:
+    for i, step in enumerate(flow):
+        key = step.get("output_key", f"step{i+1}")
+        lbl = step.get("label", f"Step {i+1}")
+        st.markdown(f"### {i+1}. {lbl} ({key})")
+        st.code(outs.get(key, "<empty>"), language="markdown")

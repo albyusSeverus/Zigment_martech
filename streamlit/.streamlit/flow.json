@@ -1,0 +1,12 @@
+[
+  {
+    "label": "Outline",
+    "output_key": "outline",
+    "template": "You are a senior content strategist. Create a clear, hierarchical outline for a blog about {idea}.\nIncorporate the following notes if helpful: {notes}.\nReturn Markdown with headings and bullet points only (no full paragraphs)."
+  },
+  {
+    "label": "Blog",
+    "output_key": "blog",
+    "template": "You are a senior content writer. Using the approved outline below, write a comprehensive blog about {idea}.\n\nOutline:\n{outline}\n\nGuidelines: follow the outline structure, use an engaging but precise tone, add concrete examples, and end with a concise summary.\nOutput in Markdown."
+  }
+]

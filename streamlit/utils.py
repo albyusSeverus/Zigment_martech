@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 import json
 
 from dotenv import load_dotenv
@@ -21,7 +21,8 @@ except Exception:  # pragma: no cover
 # Repo root (two levels up from this file)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROMPTS_FILE = REPO_ROOT / "streamlit" / ".streamlit" / "prompts.json"
-FLOW_FILE = REPO_ROOT / "streamlit" / ".streamlit" / "flow.json"
+FLOW_FILE_LEGACY = REPO_ROOT / "streamlit" / ".streamlit" / "flow.json"
+FLOWS_FILE = REPO_ROOT / "streamlit" / ".streamlit" / "flows.json"
 
 
 def load_env() -> None:
@@ -232,33 +233,139 @@ def _ensure_flow_file() -> None:
         FLOW_FILE.write_text(json.dumps(DEFAULT_FLOW, indent=2), encoding="utf-8")
 
 
-def load_flow() -> List[Dict[str, Any]]:
-    _ensure_flow_file()
+def _default_step_params(provider: str | None = None) -> Dict[str, Any]:
+    p = (provider or "Groq").capitalize()
+    return {
+        "provider": "Groq" if p not in ("Groq", "Gemini") else p,
+        "model": get_default_model(p or "Groq"),
+        "temperature": 0.7,
+        "max_tokens": 1200,
+        "top_p": 1.0,
+    }
+
+
+def _normalize_step(step: Dict[str, Any], index: int) -> Dict[str, Any]:
+    label = str(step.get("label", f"Step {index+1}"))
+    key = str(step.get("output_key", f"step{index+1}"))
+    template = str(step.get("template", ""))
+    provider = step.get("provider") or _default_step_params()["provider"]
+    params = {
+        "provider": str(provider),
+        "model": str(step.get("model") or get_default_model(str(provider))),
+        "temperature": float(step.get("temperature", 0.7)),
+        "max_tokens": int(step.get("max_tokens", 1200)),
+        "top_p": float(step.get("top_p", 1.0)),
+    }
+    return {"label": label, "output_key": key, "template": template, **params}
+
+
+def _ensure_flows_file() -> None:
+    FLOWS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    # Migrate legacy single flow if present
+    if not FLOWS_FILE.exists():
+        legacy: List[Dict[str, Any]] | None = None
+        if FLOW_FILE_LEGACY.exists():
+            try:
+                data = json.loads(FLOW_FILE_LEGACY.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    legacy = data
+            except Exception:
+                legacy = None
+        base_flow = legacy if legacy is not None else list(DEFAULT_FLOW)
+        payload = {
+            "active": "Blog",
+            "flows": [
+                {
+                    "name": "Blog",
+                    "label": "Blog",
+                    "steps": [
+                        _normalize_step(s, i) for i, s in enumerate(base_flow)
+                    ],
+                }
+            ],
+        }
+        FLOWS_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def load_flows() -> Dict[str, Any]:
+    _ensure_flows_file()
     try:
-        data = json.loads(FLOW_FILE.read_text(encoding="utf-8"))
-        if isinstance(data, list):
-            # Basic shape validation
-            out: List[Dict[str, Any]] = []
-            for step in data:
-                if not isinstance(step, dict):
+        data = json.loads(FLOWS_FILE.read_text(encoding="utf-8"))
+        # Validate structure
+        active = str(data.get("active", "Blog"))
+        flows_in = data.get("flows", [])
+        flows_out: List[Dict[str, Any]] = []
+        if isinstance(flows_in, list):
+            for f in flows_in:
+                if not isinstance(f, dict):
                     continue
-                label = str(step.get("label", "Step"))
-                key = str(step.get("output_key", "step"))
-                template = str(step.get("template", ""))
-                out.append({"label": label, "output_key": key, "template": template})
-            return out or list(DEFAULT_FLOW)
+                name = str(f.get("name", "Flow"))
+                label = str(f.get("label", name))
+                steps_in = f.get("steps", [])
+                steps_out: List[Dict[str, Any]] = []
+                if isinstance(steps_in, list):
+                    for i, s in enumerate(steps_in):
+                        if isinstance(s, dict):
+                            steps_out.append(_normalize_step(s, i))
+                flows_out.append({"name": name, "label": label, "steps": steps_out})
+        if not flows_out:
+            flows_out = [{"name": "Blog", "label": "Blog", "steps": [_normalize_step(s, i) for i, s in enumerate(DEFAULT_FLOW)]}]
+        return {"active": active, "flows": flows_out}
     except Exception:
-        pass
-    return list(DEFAULT_FLOW)
+        return {"active": "Blog", "flows": [{"name": "Blog", "label": "Blog", "steps": [_normalize_step(s, i) for i, s in enumerate(DEFAULT_FLOW)]}]}
+
+
+def save_flows(payload: Dict[str, Any]) -> None:
+    # Basic normalization before save
+    active = str(payload.get("active", "Blog"))
+    flows = payload.get("flows", [])
+    out_flows: List[Dict[str, Any]] = []
+    if isinstance(flows, list):
+        for f in flows:
+            if not isinstance(f, dict):
+                continue
+            name = str(f.get("name", f.get("label", "Flow")))
+            label = str(f.get("label", name))
+            steps = f.get("steps", [])
+            steps_out: List[Dict[str, Any]] = []
+            if isinstance(steps, list):
+                for i, s in enumerate(steps):
+                    if isinstance(s, dict):
+                        steps_out.append(_normalize_step(s, i))
+            out_flows.append({"name": name, "label": label, "steps": steps_out})
+    FLOWS_FILE.write_text(json.dumps({"active": active, "flows": out_flows}, indent=2), encoding="utf-8")
+
+
+def get_active_flow() -> Tuple[str, Dict[str, Any]]:
+    data = load_flows()
+    active = data.get("active", "Blog")
+    for f in data.get("flows", []):
+        if f.get("name") == active:
+            return str(active), f
+    # Fallback to first
+    flows = data.get("flows", [])
+    if flows:
+        return str(active), flows[0]
+    return "Blog", {"name": "Blog", "label": "Blog", "steps": [_normalize_step(s, i) for i, s in enumerate(DEFAULT_FLOW)]}
+
+
+def set_active_flow(name: str) -> None:
+    data = load_flows()
+    data["active"] = name
+    save_flows(data)
+
+
+# Backward-compatible helpers
+def load_flow() -> List[Dict[str, Any]]:
+    return get_active_flow()[1]["steps"]
 
 
 def save_flow(flow: List[Dict[str, Any]]) -> None:
-    # Normalize
-    norm: List[Dict[str, Any]] = []
-    for s in flow:
-        norm.append({
-            "label": str(s.get("label", "Step")),
-            "output_key": str(s.get("output_key", "step")),
-            "template": str(s.get("template", "")),
-        })
-    FLOW_FILE.write_text(json.dumps(norm, indent=2), encoding="utf-8")
+    name, active_flow = get_active_flow()
+    data = load_flows()
+    # Update the matching flow
+    for f in data["flows"]:
+        if f.get("name") == name:
+            f["steps"] = [_normalize_step(s, i) for i, s in enumerate(flow)]
+            break
+    save_flows(data)

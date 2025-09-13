@@ -51,6 +51,12 @@ def run_step(idx: int) -> None:
     variables = {"idea": idea, "notes": notes}
     variables.update(st.session_state.get("flow_outputs", {}))
     prompt_text = format_prompt(tmpl, variables)
+    # Use per-step params
+    provider = step.get("provider", "Groq")
+    model = step.get("model") or None
+    temperature = float(step.get("temperature", 0.7))
+    max_tokens = int(step.get("max_tokens", 1200))
+    top_p = float(step.get("top_p", 1.0))
     try:
         text = generate(provider, prompt_text, None, model, float(temperature), int(max_tokens), float(top_p))
         st.session_state["flow_outputs"][out_key] = text

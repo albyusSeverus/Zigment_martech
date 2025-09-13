@@ -2,6 +2,12 @@ import streamlit as st
 
 from utils import load_env, load_flows, save_flows, get_default_model, format_prompt, generate
 
+try:
+    from streamlit_agraph import agraph, Node, Edge, Config  # type: ignore
+    HAVE_AGRAPH = True
+except Exception:  # pragma: no cover
+    HAVE_AGRAPH = False
+
 
 st.set_page_config(page_title="Flow Builder", layout="wide")
 
@@ -154,6 +160,26 @@ for i, step in enumerate(steps):
             key=f"connect_{i}",
             help="Choose which steps depend on this step's output.",
         )
+
+# Visual graph preview (optional)
+st.divider()
+st.subheader("Graph Preview")
+if HAVE_AGRAPH and steps:
+    # Build nodes/edges for preview
+    key_to_idx = {s.get("output_key", f"step{i+1}"): i for i, s in enumerate(steps)}
+    g_nodes = []
+    g_edges = []
+    for i, s in enumerate(steps):
+        label = s.get("label", f"Step {i+1}")
+        key = s.get("output_key", f"step{i+1}")
+        g_nodes.append(Node(id=key, label=f"{i+1}. {label}\n({key})"))
+        for tgt in s.get("connect_to", []) or []:
+            if tgt in key_to_idx:
+                g_edges.append(Edge(source=key, target=tgt))
+    config = Config(width=900, height=400, directed=True, physics=False)
+    agraph(nodes=g_nodes, edges=g_edges, config=config)
+else:
+    st.info("Install optional dependency 'streamlit-agraph' to see a live graph preview (pip install streamlit-agraph).")
 
 st.divider()
 cols = st.columns([1, 1, 2])

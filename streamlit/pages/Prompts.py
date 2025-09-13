@@ -18,12 +18,14 @@ flows = data.get("flows", [])
 active = data.get("active", "Blog")
 
 # Sidebar: run controls
+curr_flow_sidebar = next((f for f in flows if f.get("name") == active), (flows[0] if flows else {"steps": []}))
+
 with st.sidebar:
     st.header("Run Flow")
     idea = st.text_input("Idea / Topic", value="Agentic AI for growth teams", key="idea_fb")
     notes = st.text_area("Notes (optional)", height=100, key="notes_fb")
     run_all = st.button("Generate All", type="primary", key="run_all_fb")
-    step_opts = [f"{i+1}. {s['label']}" for s in flows[0]["steps"]] if flows else []
+    step_opts = [f"{i+1}. {s['label']}" for i, s in enumerate(curr_flow_sidebar.get("steps", []))] if flows else []
     selected = st.selectbox("Run single step", step_opts, key="sel_step_fb")
     run_one = st.button("Run Selected", key="run_one_fb")
 
@@ -157,14 +159,16 @@ def run_step(idx: int) -> None:
     except Exception as e:  # noqa: BLE001
         st.error(str(e))
 
-if run_all:
-    for i in range(len(steps)):
+steps_for_run = curr_flow_sidebar.get("steps", [])
+
+if run_all and steps_for_run:
+    for i in range(len(steps_for_run)):
         run_step(i)
 
-if run_one and steps:
+if run_one and steps_for_run:
     try:
         idx = int(str(selected).split(".")[0]) - 1
-        if 0 <= idx < len(steps):
+        if 0 <= idx < len(steps_for_run):
             run_step(idx)
     except Exception:
         pass

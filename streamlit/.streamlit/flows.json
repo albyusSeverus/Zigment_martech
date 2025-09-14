@@ -4,7 +4,38 @@
     {
       "name": "Blog",
       "label": "Blog",
-      "steps": []
+      "steps": [
+        {
+          "label": "Step 1",
+          "output_key": "step1",
+          "template": "",
+          "provider": "Groq",
+          "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+          "temperature": 0.7,
+          "max_tokens": 1200,
+          "top_p": 1.0
+        },
+        {
+          "label": "Step 2",
+          "output_key": "step2",
+          "template": "",
+          "provider": "Groq",
+          "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+          "temperature": 0.7,
+          "max_tokens": 1200,
+          "top_p": 1.0
+        },
+        {
+          "label": "Step 3",
+          "output_key": "step3",
+          "template": "",
+          "provider": "Groq",
+          "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+          "temperature": 0.7,
+          "max_tokens": 1200,
+          "top_p": 1.0
+        }
+      ]
     }
   ]
 }

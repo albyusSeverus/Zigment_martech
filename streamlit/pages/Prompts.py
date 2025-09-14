@@ -14,7 +14,7 @@ st.set_page_config(page_title="Flow Builder", layout="wide")
 load_env()
 
 st.title("Flow Builder")
-st.caption("Manage multiple flows. Edit steps with per-step settings. Connect steps to form a graph.")
+st.caption("Manage flows. Click a node to edit its prompt and model settings. Connect nodes to define order.")
 
 if "flows_state" not in st.session_state:
     st.session_state["flows_state"] = load_flows()
@@ -98,6 +98,11 @@ def add_item() -> None:
 
 existing_keys = [s.get("output_key", f"step{idx+1}") for idx, s in enumerate(steps)]
 
+# Selected node state
+if "selected_node_idx" not in st.session_state:
+    st.session_state["selected_node_idx"] = 0 if steps else -1
+sel_idx = st.session_state["selected_node_idx"]
+
 def downstream_defaults(i: int) -> list[str]:
     # Build default downstream connections from edges if present
     key = steps[i].get("output_key", f"step{i+1}")
@@ -114,52 +119,67 @@ def downstream_defaults(i: int) -> list[str]:
                     outs.append(k)
     return outs
 
-for i, step in enumerate(steps):
-    with st.container(border=True):
-        cols = st.columns([5, 1, 1, 1])
-        with cols[0]:
-            step["label"] = st.text_input(f"Label #{i+1}", value=step.get("label", "Step"), key=f"label_{i}")
-        with cols[1]:
-            if st.button("Up", key=f"up_{i}"):
-                move_item(i, -1)
-                st.rerun()
-        with cols[2]:
-            if st.button("Down", key=f"down_{i}"):
-                move_item(i, +1)
-                st.rerun()
-        with cols[3]:
-            if st.button("Delete", key=f"del_{i}"):
-                delete_item(i)
-                st.rerun()
+# Node palette (compact boxes)
+st.subheader("Nodes")
+if steps:
+    cols = st.columns(4)
+    for i, step in enumerate(steps):
+        c = cols[i % 4]
+        with c:
+            with st.container(border=True):
+                lbl = step.get("label", f"Step {i+1}")
+                keyv = step.get("output_key", f"step{i+1}")
+                st.markdown(f"**{i+1}. {lbl}**\n\n`{keyv}`")
+                bcols = st.columns([1,1,1])
+                with bcols[0]:
+                    if st.button("Select", key=f"sel_{i}"):
+                        st.session_state["selected_node_idx"] = i
+                        st.rerun()
+                with bcols[1]:
+                    if st.button("Up", key=f"up_{i}"):
+                        move_item(i, -1)
+                        st.rerun()
+                with bcols[2]:
+                    if st.button("Down", key=f"down_{i}"):
+                        move_item(i, +1)
+                        st.rerun()
+                if st.button("Delete", key=f"del_{i}"):
+                    delete_item(i)
+                    if sel_idx == i:
+                        st.session_state["selected_node_idx"] = -1
+                    st.rerun()
+else:
+    st.info("No nodes yet. Click Add Step to create one.")
 
-        step["output_key"] = st.text_input("Output key", value=step.get("output_key", f"step{i+1}"), key=f"key_{i}")
-        step["template"] = st.text_area(
-            "Prompt template",
-            value=step.get("template", ""),
-            height=160,
-            key=f"tmpl_{i}",
-        )
-        pcols = st.columns([2, 3, 1, 1, 1])
-        with pcols[0]:
-            step["provider"] = st.selectbox("Provider", ["Groq", "Gemini"], index=0 if step.get("provider", "Groq") == "Groq" else 1, key=f"prov_{i}")
-        with pcols[1]:
-            step["model"] = st.text_input("Model", value=step.get("model", get_default_model(step.get("provider", "Groq"))), key=f"model_{i}")
-        with pcols[2]:
-            step["temperature"] = float(st.number_input("Temp", min_value=0.0, max_value=2.0, value=float(step.get("temperature", 0.7)), step=0.1, key=f"temp_{i}"))
-        with pcols[3]:
-            step["top_p"] = float(st.number_input("TopP", min_value=0.0, max_value=1.0, value=float(step.get("top_p", 1.0)), step=0.05, key=f"topp_{i}"))
-        with pcols[4]:
-            step["max_tokens"] = int(st.number_input("MaxTok", min_value=1, max_value=4000, value=int(step.get("max_tokens", 1200)), step=50, key=f"maxtok_{i}"))
+st.divider()
 
-        # Graph connections (fallback until drag & drop is added)
-        step.setdefault("connect_to", downstream_defaults(i))
-        step["connect_to"] = st.multiselect(
-            "Connect to (downstream)",
-            options=[k for k in existing_keys if k != step.get("output_key", f"step{i+1}")],
-            default=step.get("connect_to", []),
-            key=f"connect_{i}",
-            help="Choose which steps depend on this step's output.",
-        )
+# Detail editor for selected node
+st.subheader("Selected Node")
+if 0 <= sel_idx < len(steps):
+    step = steps[sel_idx]
+    st.markdown(f"Editing node #{sel_idx+1}")
+    cols = st.columns([3,2])
+    with cols[0]:
+        step["label"] = st.text_input("Label", value=step.get("label", f"Step {sel_idx+1}"), key=f"label_{sel_idx}")
+        step["output_key"] = st.text_input("Output key", value=step.get("output_key", f"step{sel_idx+1}"), key=f"key_{sel_idx}")
+        step["template"] = st.text_area("Prompt template", value=step.get("template", ""), height=220, key=f"tmpl_{sel_idx}")
+    with cols[1]:
+        step["provider"] = st.selectbox("Provider", ["Groq", "Gemini"], index=0 if step.get("provider", "Groq") == "Groq" else 1, key=f"prov_{sel_idx}")
+        step["model"] = st.text_input("Model", value=step.get("model", get_default_model(step.get("provider", "Groq"))), key=f"model_{sel_idx}")
+        step["temperature"] = float(st.number_input("Temperature", min_value=0.0, max_value=2.0, value=float(step.get("temperature", 0.7)), step=0.1, key=f"temp_{sel_idx}"))
+        step["top_p"] = float(st.number_input("Top P", min_value=0.0, max_value=1.0, value=float(step.get("top_p", 1.0)), step=0.05, key=f"topp_{sel_idx}"))
+        step["max_tokens"] = int(st.number_input("Max tokens", min_value=1, max_value=4000, value=int(step.get("max_tokens", 1200)), step=50, key=f"maxtok_{sel_idx}"))
+    # Connections
+    step.setdefault("connect_to", downstream_defaults(sel_idx))
+    step["connect_to"] = st.multiselect(
+        "Connect to (downstream)",
+        options=[k for k in existing_keys if k != step.get("output_key", f"step{sel_idx+1}")],
+        default=step.get("connect_to", []),
+        key=f"connect_{sel_idx}",
+        help="Choose which steps depend on this step's output.",
+    )
+else:
+    st.info("Select a node to edit its details.")
 
 # Visual graph preview (optional)
 st.divider()

@@ -166,7 +166,6 @@ def edit_node(idx: int):
 
 
 def render_editor():
-    global data, flows, current, steps
     # Two-column layout: left editor, right outputs
     left, right = st.columns([7, 5])
 
@@ -278,37 +277,7 @@ def render_editor():
             st.caption("Run the flow to see output here.")
 
 
-    # Node grid
-    st.subheader("Nodes")
-    if steps:
-        cols = st.columns(4)
-        for i, s in enumerate(steps):
-            c = cols[i % 4]
-            with c:
-                with st.container(border=True):
-                    lbl = s.get("label", f"Step {i+1}")
-                    keyv = s.get("output_key", f"step{i+1}")
-                    st.markdown(f"**{i+1}. {lbl}**\n\n`{keyv}`")
-                    bcols = st.columns([1, 1, 1])
-                    with bcols[0]:
-                        if st.button("Edit", key=f"edit_{i}"):
-                            open_editor(i)
-                    with bcols[1]:
-                        if st.button("Up", key=f"up_{i}"):
-                            move_item(i, -1)
-                            st.rerun()
-                    with bcols[2]:
-                        if st.button("Down", key=f"down_{i}"):
-                            move_item(i, +1)
-                            st.rerun()
-                    if st.button("Delete", key=f"del_{i}"):
-                        delete_item(i)
-                        st.rerun()
-    else:
-        st.info("No nodes yet. Click 'Add Node'.")
-
-
-# Outputs
+# Trigger editor dialog
 if "edit_idx" in st.session_state and st.session_state["edit_idx"] is not None:
     edit_node(int(st.session_state["edit_idx"]))
     st.session_state["edit_idx"] = None
@@ -328,3 +297,4 @@ if screen == "home":
                 st.rerun()
 else:
     render_editor()
+

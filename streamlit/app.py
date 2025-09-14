@@ -1,6 +1,13 @@
 import streamlit as st
 
-from utils import load_env, load_flows, save_flows, get_default_model
+from utils import (
+    load_env,
+    load_flows,
+    save_flows,
+    get_default_model,
+    format_prompt,
+    generate,
+)
 
 
 st.set_page_config(page_title="Flow Builder", layout="wide")
@@ -38,6 +45,23 @@ if "edge_keys" not in st.session_state:
     st.session_state["edge_keys"] = ek
 
 edge_keys: list[tuple[str, str]] = st.session_state["edge_keys"]
+try:
+    if not edge_keys:
+        keys_present = [s.get("output_key", "") for s in steps]
+        if "outline" in keys_present and "blog" in keys_present:
+            st.session_state["edge_keys"] = [("outline", "blog")]
+            edge_keys = st.session_state["edge_keys"]
+except Exception:
+    pass
+
+# Global variables for prompts
+st.subheader("Variables")
+idea = st.text_input("Idea / Topic", value="Agentic AI for growth teams")
+notes = st.text_area("Notes (optional)", height=80)
+
+# Outputs storage
+if "node_outputs" not in st.session_state:
+    st.session_state["node_outputs"] = {}
 
 # Helpers
 def step_key(idx: int) -> str:
@@ -199,15 +223,35 @@ if steps:
                 lbl = s.get("label", f"Step {i+1}")
                 keyv = s.get("output_key", f"step{i+1}")
                 st.markdown(f"**{i+1}. {lbl}**\n\n`{keyv}`")
-                bcols = st.columns([1, 1, 1])
+                bcols = st.columns([1, 1, 1, 1])
                 with bcols[0]:
                     if st.button("Edit", key=f"edit_{i}"):
                         open_editor(i)
                 with bcols[1]:
+                    if st.button("Run", key=f"run_{i}"):
+                        # Run this single node with current variables and any existing upstream outputs
+                        variables = {"idea": idea, "notes": notes}
+                        variables.update(st.session_state.get("node_outputs", {}))
+                        prompt_text = format_prompt(s.get("template", ""), variables)
+                        try:
+                            out = generate(
+                                s.get("provider", "Groq"),
+                                prompt_text,
+                                None,
+                                s.get("model", get_default_model(s.get("provider", "Groq"))),
+                                float(s.get("temperature", 0.7)),
+                                int(s.get("max_tokens", 1200)),
+                                float(s.get("top_p", 1.0)),
+                            )
+                            st.session_state["node_outputs"][s.get("output_key", f"step{i+1}")] = out
+                            st.rerun()
+                        except Exception as e:  # noqa: BLE001
+                            st.error(str(e))
+                with bcols[2]:
                     if st.button("Up", key=f"up_{i}"):
                         move_item(i, -1)
                         st.rerun()
-                with bcols[2]:
+                with bcols[3]:
                     if st.button("Down", key=f"down_{i}"):
                         move_item(i, +1)
                         st.rerun()

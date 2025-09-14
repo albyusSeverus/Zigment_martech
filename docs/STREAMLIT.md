@@ -1,9 +1,8 @@
 # Streamlit UI
 
-Two pages:
+Single page app:
 
-- `streamlit/app.py` – Content Generator (runs your configured flow: choose model, idea → Generate steps).
-- `streamlit/pages/Prompts.py` – Flow Builder to design/edit the ordered steps and their prompt templates.
+- `streamlit/app.py` – Flow Builder only. Create nodes (small boxes), connect them, and click a node to open a popup editor for prompt and per-step model settings.
 
 ## Setup
 
@@ -43,9 +42,10 @@ streamlit run streamlit/app.py
 
 ## Usage
 
-- Open `Prompts` to configure the flow. For each step, set:
-  - Label: display name.
-  - Output key: how later steps reference this step’s output (e.g., `outline`).
-  - Template: the prompt text (variables available: `{idea}`, `{notes}`, plus prior step outputs by their output key, e.g. `{outline}`).
-- In `Content Generator`, pick provider/model and enter Idea + Notes.
-- Click `Generate All` or run a specific step from the dropdown.
+- Add Node to create a box.
+- Click Edit on a box to open the popup and set:
+  - Label, Output key
+  - Prompt template
+  - Provider, Model, Temperature, TopP, MaxTokens
+- Define connections in the popup or via the Connections list.
+- Save Flow to persist to `.streamlit/flows.json`.

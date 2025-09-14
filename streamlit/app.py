@@ -100,12 +100,34 @@ def edit_node(idx: int):
         kept.append((src, tgt))
     st.session_state["edge_keys"] = kept
     st.divider()
+    # Quick test-run
+    st.markdown("#### Test run (optional)")
+    idea = st.text_input("Idea", value="Agentic AI for growth teams", key=f"idea_test_{idx}")
+    notes = st.text_area("Notes", value="", height=60, key=f"notes_test_{idx}")
+    if st.button("Run Test", key=f"run_test_{idx}"):
+        try:
+            from utils import format_prompt, generate
+            variables = {"idea": idea, "notes": notes}
+            prompt_text = format_prompt(s.get("template", ""), variables)
+            out = generate(
+                s.get("provider", "Groq"),
+                prompt_text,
+                None,
+                s.get("model", get_default_model(s.get("provider", "Groq"))),
+                float(s.get("temperature", 0.7)),
+                int(s.get("max_tokens", 1200)),
+                float(s.get("top_p", 1.0)),
+            )
+            st.text_area("Output", value=out, height=200)
+        except Exception as e:  # noqa: BLE001
+            st.error(str(e))
+    st.divider()
     if st.button("Done", type="primary"):
         st.rerun()
 
 
 # Toolbar
-toolbar = st.columns([1, 1, 6])
+toolbar = st.columns([1, 1, 4, 2])
 with toolbar[0]:
     if st.button("Add Node"):
         add_item()
@@ -134,6 +156,36 @@ with toolbar[1]:
         current["graph"] = {"nodes": nodes, "edges": edges}
         save_flows(data)
         st.success("Flow saved.")
+with toolbar[2]:
+    # Export current flow JSON
+    import json  # local import for this block
+    export_payload = {
+        "name": current.get("name", "Flow"),
+        "label": current.get("label", current.get("name", "Flow")),
+        "steps": steps,
+        "graph": current.get("graph", {}),
+    }
+    st.download_button(
+        "Export JSON",
+        data=json.dumps(export_payload, indent=2),
+        file_name=f"{current.get('name','flow')}.json",
+        mime="application/json",
+    )
+with toolbar[3]:
+    up = st.file_uploader("Import JSON", type=["json"], label_visibility="collapsed")
+    if up is not None:
+        try:
+            payload = json.loads(up.getvalue().decode("utf-8"))
+            current["name"] = payload.get("name", current.get("name", "Flow"))
+            current["label"] = payload.get("label", current.get("label", current.get("name", "Flow")))
+            current["steps"] = payload.get("steps", [])
+            current["graph"] = payload.get("graph", {})
+            st.session_state["edge_keys"] = []  # reset; rebuild next save
+            save_flows(data)
+            st.success("Imported flow JSON.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Import failed: {e}")
 
 
 # Node grid (compact boxes)
@@ -179,4 +231,5 @@ else:
 if "edit_idx" in st.session_state and st.session_state["edit_idx"] is not None:
     edit_node(int(st.session_state["edit_idx"]))
     st.session_state["edit_idx"] = None
+
 
